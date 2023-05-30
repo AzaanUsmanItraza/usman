@@ -1,0 +1,75 @@
+import cv2
+from picamera2 import Picamera2
+import time
+from servo import Servo
+
+pan=Servo(pin=13)
+tilt=Servo(pin=12)
+
+panAngle=0
+tiltAngle=0
+
+pan.set_angle(panAngle)
+tilt.set_angle(tiltAngle)
+
+
+picam2 = Picamera2()
+dispW=640
+dispH=360
+picam2.preview_configuration.main.size = (dispW,dispH)
+picam2.preview_configuration.main.format = "RGB888"
+picam2.preview_configuration.controls.FrameRate=30
+picam2.preview_configuration.align()
+picam2.configure("preview")
+picam2.start()
+fps=0
+pos=(30,60)
+font=cv2.FONT_HERSHEY_SIMPLEX
+height=1.5
+weight=3
+myColor=(0,0,255)
+
+faceCascade=cv2.CascadeClassifier('./haar/haarcascade_frontalface_default.xml')
+#eyeCascade=cv2.CascadeClassifier('./haar/haarcascade_eye.xml')
+
+
+while True:
+    tStart=time.time()
+    frame= picam2.capture_array()
+    frame=cv2.flip(frame,-1)
+    frameGray=cv2.cvtColor(frame,cv2.COLOR_BGR2GRAY)
+    faces=faceCascade.detectMultiScale(frameGray,1.3,5)
+    for face in faces:
+        x,y,w,h=face
+        cv2.rectangle(frame,(x,y),(x+w,y+h),(255,0,0),3)
+        panError=(x+w/2)-dispW/2
+        panAngle=panAngle-panError/70
+        if panAngle>90:
+            panAngle=90
+        if panAngle<-90:
+            panAngle=-90
+        if abs(panError)>35:
+            pan.set_angle(panAngle)
+        tiltError=(y+h/2)-dispH/2
+        tiltAngle=tiltAngle+tiltError/70
+        if tiltAngle>40:
+            tiltAngle=40
+        if tiltAngle<-90:
+            tiltAngle=-90
+        if abs(tiltError)>35:
+            tilt.set_angle(tiltAngle)
+#         roiGray=frameGray[y:y+h,x:x+w]
+#         roiColor=frame[y:y+h,x:x+w]
+#         eyes=eyeCascade.detectMultiScale(roiGray,1.3,5)
+#         for eye in eyes:
+#             x,y,w,h=eye
+#             cv2.rectangle(roiColor,(x,y),(x+w,y+h),(255,0,0),3)
+    cv2.putText(frame,str(int(fps))+' FPS',pos,font,height,myColor,weight)
+    cv2.imshow("Camera", frame)
+
+    if cv2.waitKey(1)==ord('q'):
+        break
+    tEnd=time.time()
+    loopTime=tEnd-tStart
+    fps=.9*fps + .1*(1/loopTime)
+cv2.destroyAllWindows()
